@@ -135,6 +135,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.env.local
+.env.*.local
 
 # Spyder project settings
 .spyderproject
@@ -179,3 +181,62 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# ==========================================
+# SKINTEL PROJECT SPECIFIC
+# ==========================================
+
+# Data files (Large medical image datasets)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Model files (Trained models and checkpoints)
+models/checkpoints/*
+models/*.pth
+models/*.pt
+models/*.h5
+models/*.ckpt
+!models/checkpoints/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# Docker volumes and cache
+volumes/
+.docker/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# DVC (Data Version Control)
+.dvc/
+*.dvc
+
+# MinIO/S3 local cache
+.minio/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
