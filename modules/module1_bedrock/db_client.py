@@ -12,11 +12,16 @@ async def initialize_mongodb():
     """Initializes the MongoDB connection pool."""
     mongo_url = os.getenv("MONGODB_URL")
     db_name = os.getenv("MONGODB_DB_NAME")
-    
+
     try:
-        db.client = AsyncIOMotorClient(mongo_url)
+        db.client = AsyncIOMotorClient(
+            mongo_url,
+            maxPoolSize=10,
+            minPoolSize=2,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+        )
         db.db = db.client[db_name]
-        # Verify connection
         await db.client.admin.command('ping')
         logger.info(f"Successfully connected to MongoDB: {db_name}")
     except Exception as e:

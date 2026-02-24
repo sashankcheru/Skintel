@@ -3,11 +3,10 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from loguru import logger
 from dotenv import load_dotenv
+from pymongo import UpdateOne
 
-# Load environment variables from your .env file
 load_dotenv()
 
-# Multimodal Mapping Matrix: The "Big 10" Rulebook
 SKINTEL_RULEBOOK = [
     {
         "category": "Bacterial",
@@ -96,23 +95,42 @@ SKINTEL_RULEBOOK = [
 ]
 
 async def seed_matrix():
-    """Seeds the Multimodal Mapping Matrix into MongoDB"""
-    # Use environment variables for connection
+    """
+    Idempotent upsert — safe to run multiple times.
+    Keyed on icd11: updates existing records, inserts new ones, never deletes.
+    """
     mongo_url = os.getenv("MONGODB_URL")
     db_name = os.getenv("MONGODB_DB_NAME")
-    
-    client = AsyncIOMotorClient(mongo_url)
+
+    client = AsyncIOMotorClient(
+        mongo_url,
+        serverSelectionTimeoutMS=5000,
+    )
     db = client[db_name]
     collection = db["medical_knowledge_base"]
-    
+
     try:
-        # Clear existing rules to avoid duplicates
-        await collection.delete_many({})
-        # Insert the Rulebook
-        result = await collection.insert_many(SKINTEL_RULEBOOK)
-        logger.success(f"✅ Successfully seeded {len(result.inserted_ids)} disease profiles into 'medical_knowledge_base'")
+        # Build upsert operations — one per disease, keyed on icd11
+        operations = [
+            UpdateOne(
+                {"icd11": rule["icd11"]},   # match filter
+                {"$set": rule},              # update payload
+                upsert=True                  # insert if not found
+            )
+            for rule in SKINTEL_RULEBOOK
+        ]
+
+        result = await collection.bulk_write(operations, ordered=False)
+
+        logger.success(
+            f"✅ Knowledge base synced — "
+            f"inserted: {result.upserted_count}, "
+            f"updated: {result.modified_count}, "
+            f"matched: {result.matched_count}"
+        )
     except Exception as e:
         logger.error(f"❌ Failed to seed Rulebook: {e}")
+        raise
     finally:
         client.close()
 
