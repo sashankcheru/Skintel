@@ -58,6 +58,193 @@ SCHEMA = pa.schema([
     ('image_path',       pa.string()),
     ('label',            pa.string()),
 ])
+# ── Label Normalizer ──────────────────────────────────────────────────────────
+# Maps all dataset-specific label variants to a single canonical name.
+# Add new mappings here as new datasets are added — never touch ETL logic.
+
+LABEL_MAP = {
+    # ── Malignant ──────────────────────────────────────────────────────────
+    "basal cell carcinoma":             "Basal Cell Carcinoma",
+    "bcc":                              "Basal Cell Carcinoma",
+    "solid cystic basal cell carcinoma":"Basal Cell Carcinoma",
+    "basal cell carcinoma morpheiform": "Basal Cell Carcinoma",
+    "scc/sccis":                        "Squamous Cell Carcinoma",
+    "squamous cell carcinoma":          "Squamous Cell Carcinoma",
+    "scc":                              "Squamous Cell Carcinoma",
+    "melanoma":                         "Melanoma",
+    "malignant melanoma":               "Melanoma",
+    "superficial spreading melanoma ssm": "Melanoma",
+    "lentigo maligna":                  "Melanoma",
+    "mel":                              "Melanoma",
+    "actinic keratosis":                "Actinic Keratosis",
+    "ak":                               "Actinic Keratosis",
+    "porokeratosis actinic":            "Actinic Keratosis",
+    "disseminated actinic porokeratosis":"Actinic Keratosis",
+    "kaposi sarcoma":                   "Kaposi Sarcoma",
+    "mycosis fungoides":                "Mycosis Fungoides",
+    "inflicted skin lesions":           "Inflicted Skin Lesions",
+
+    # ── Autoimmune ─────────────────────────────────────────────────────────
+    "psoriasis":                        "Psoriasis",
+    "pustular psoriasis":               "Psoriasis",
+    "lupus erythematosus":              "Lupus",
+    "lupus subacute":                   "Lupus",
+    "cutaneous lupus":                  "Lupus",
+    "sle - systemic lupus erythematosus-related syndrome": "Lupus",
+    "scleroderma":                      "Scleroderma",
+    "scleromyxedema":                   "Scleroderma",
+    "dermatomyositis":                  "Dermatomyositis",
+    "acquired autoimmune bullous diseaseherpes gestationis": "Autoimmune Bullous Disease",
+    "bullous pemphigoid":               "Autoimmune Bullous Disease",
+    "epidermolysis bullosa":            "Autoimmune Bullous Disease",
+
+    # ── Allergic / Eczema ──────────────────────────────────────────────────
+    "eczema":                           "Eczema",
+    "dyshidrotic eczema":               "Eczema",
+    "neurodermatitis":                  "Eczema",
+    "infected eczema":                  "Eczema",
+    "acute constitutional eczema":      "Eczema",
+    "lichenified eczematous dermatitis":"Eczema",
+    "acute and chronic dermatitis":     "Eczema",
+    "chronic dermatitis, nos":          "Eczema",
+    "stasis dermatitis":                "Stasis Dermatitis",
+    "allergic contact dermatitis":      "Contact Dermatitis",
+    "irritant contact dermatitis":      "Contact Dermatitis",
+    "contact dermatitis, nos":          "Contact Dermatitis",
+    "cd - contact dermatitis":          "Contact Dermatitis",
+    "acute dermatitis, nos":            "Contact Dermatitis",
+    "contact dermatitis caused by rhus diversiloba": "Contact Dermatitis",
+    "urticaria":                        "Urticaria",
+    "urticaria pigmentosa":             "Urticaria",
+    "drug eruption":                    "Drug Rash",
+    "drug rash":                        "Drug Rash",
+    "drug induced pigmentary changes":  "Drug Rash",
+    "fixed eruptions":                  "Drug Rash",
+    "photodermatoses":                  "Photodermatitis",
+    "photodermatitis":                  "Photodermatitis",
+
+    # ── Bacterial ──────────────────────────────────────────────────────────
+    "cellulitis":                       "Cellulitis",
+    "impetigo":                         "Impetigo",
+    "folliculitis":                     "Folliculitis",
+    "hidradenitis":                     "Hidradenitis Suppurativa",
+    "paronychia":                       "Paronychia",
+    "neutrophilic dermatoses":          "Neutrophilic Dermatosis",
+    "abscess":                          "Abscess",
+    "infection of skin":                "Skin Infection",
+    "local infection of wound":         "Skin Infection",
+    "localized skin infection":         "Skin Infection",
+    "skin infection":                   "Skin Infection",
+
+    # ── Viral ──────────────────────────────────────────────────────────────
+    "shingles":                         "Shingles",
+    "herpes zoster":                    "Shingles",
+    "herpes simplex":                   "Herpes Simplex",
+    "viral exanthem":                   "Viral Exanthem",
+    "molluscum contagiosum":            "Molluscum Contagiosum",
+
+    # ── Fungal ─────────────────────────────────────────────────────────────
+    "tinea":                            "Tinea",
+    "tinea versicolor":                 "Tinea Versicolor",
+    "ringworm":                         "Tinea",
+    "candida intertrigo":               "Candidiasis",
+    "intertrigo":                       "Intertrigo",
+    "deep fungal infection":            "Deep Fungal Infection",
+
+    # ── Hormonal ───────────────────────────────────────────────────────────
+    "acne":                             "Acne",
+    "acne vulgaris":                    "Acne",
+    "rosacea":                          "Rosacea",
+    "perioral dermatitis":              "Perioral Dermatitis",
+    "rhinophyma":                       "Rosacea",
+    "seborrheic dermatitis":            "Seborrheic Dermatitis",
+
+    # ── Nutritional / Systemic ─────────────────────────────────────────────
+    "acanthosis nigricans":             "Acanthosis Nigricans",
+    "xanthomas":                        "Xanthomas",
+    "porphyria":                        "Porphyria",
+    "necrobiosis lipoidica":            "Necrobiosis Lipoidica",
+    "purpura":                          "Purpura",
+    "leukocytoclastic vasculitis":      "Vasculitis",
+    "pigmented purpuric eruption":      "Purpura",
+    "erythema nodosum":                 "Erythema Nodosum",
+    "erythema multiforme":              "Erythema Multiforme",
+    "stevens johnson syndrome":         "Stevens Johnson Syndrome",
+    "vitiligo":                         "Vitiligo",
+    "melasma":                          "Melasma",
+
+    # ── Benign / Structural ────────────────────────────────────────────────
+    "nevus":                            "Nevus",
+    "nev":                              "Nevus",
+    "nevocytic nevus":                  "Nevus",
+    "congenital nevus":                 "Nevus",
+    "epidermal nevus":                  "Nevus",
+    "becker nevus":                     "Nevus",
+    "halo nevus":                       "Nevus",
+    "melanocytic nevus":                "Nevus",
+    "atypical nevus":                   "Atypical Nevus",
+    "seborrheic keratosis":             "Seborrheic Keratosis",
+    "sek":                              "Seborrheic Keratosis",
+    "sk/isk":                           "Seborrheic Keratosis",
+    "keratosis pilaris":                "Keratosis Pilaris",
+    "lichen planus":                    "Lichen Planus",
+    "lichen planus/lichenoid eruption": "Lichen Planus",
+    "lichen simplex":                   "Lichen Simplex Chronicus",
+    "lichen simplex chronicus":         "Lichen Simplex Chronicus",
+    "prurigo nodularis":                "Prurigo Nodularis",
+    "granuloma annulare":               "Granuloma Annulare",
+    "sarcoidosis":                      "Sarcoidosis",
+    "cutaneous sarcoidosis":            "Sarcoidosis",
+    "keloid":                           "Keloid",
+    "dermatofibroma":                   "Dermatofibroma",
+    "pyogenic granuloma":               "Pyogenic Granuloma",
+    "port wine stain":                  "Port Wine Stain",
+    "hemangioma":                       "Hemangioma",
+    "scabies":                          "Scabies",
+    "insect bite":                      "Insect Bite",
+    "pityriasis rosea":                 "Pityriasis Rosea",
+    "pityriasis rubra pilaris":         "Pityriasis Rubra Pilaris",
+    "ichthyosis vulgaris":              "Ichthyosis",
+    "ichthyosis":                       "Ichthyosis",
+    "striae":                           "Striae",
+    "milia":                            "Milia",
+    "syringoma":                        "Syringoma",
+    "telangiectases":                   "Telangiectasia",
+    "livedo reticularis":               "Livedo Reticularis",
+    "scar condition":                   "Scar",
+    "hypersensitivity":                 "Hypersensitivity",
+    "skin ulcer":                       "Skin Ulcer",
+}
+
+
+def normalize_label(raw_label: str) -> str:
+    """
+    Normalizes any raw label string to a canonical disease name.
+
+    Handles:
+    - Simple strings: "basal cell carcinoma" → "Basal Cell Carcinoma"
+    - SCIN probability dicts: "{'Eczema': 0.67, 'Contact Dermatitis': 0.33}"
+      → picks highest confidence → normalizes
+    - Unknown labels → returns title-cased original (never drops data)
+    """
+    if not raw_label or raw_label.strip() in ('{}', 'UNKNOWN', ''):
+        return 'UNKNOWN'
+
+    # Handle SCIN probability dict format
+    if raw_label.strip().startswith('{'):
+        try:
+            import ast
+            prob_dict = ast.literal_eval(raw_label.strip())
+            if not prob_dict:
+                return 'UNKNOWN'
+            # Pick highest confidence label
+            raw_label = max(prob_dict, key=prob_dict.get)
+        except (ValueError, SyntaxError):
+            pass
+
+    # Normalize via map — case insensitive lookup
+    key = raw_label.strip().lower()
+    return LABEL_MAP.get(key, raw_label.strip().title())
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _empty_cbc():
@@ -140,7 +327,7 @@ def _extract_fitzpatrick(existing_paths: set) -> list:
             'symptoms':         symptoms,
             'fitzpatrick_type': fitz,
             'image_path':       img_path,
-            'label':            str(row['label']) if pd.notna(row['label']) else 'UNKNOWN',
+            'label': normalize_label(str(row['label']) if pd.notna(row['label']) else ''),
         })
 
     logger.info(f"Fitzpatrick17k — {len(records)} new record(s) extracted")
@@ -205,7 +392,7 @@ def _extract_pad_ufes(existing_paths: set) -> list:
             'symptoms':         symptoms,
             'fitzpatrick_type': fitz,
             'image_path':       img_path,
-            'label':            diag,
+            'label': normalize_label(diag),
         })
 
     logger.info(f"PAD-UFES-20 — {len(records)} new record(s) extracted")
@@ -256,8 +443,14 @@ def _extract_scin(existing_paths: set) -> list:
         except (ValueError, TypeError):
             fitz = 0
 
-        label = str(row.get('weighted_skin_condition_label', 'UNKNOWN'))
+        label = normalize_label(str(row.get('weighted_skin_condition_label', '')))
+        
+        # Skip unlabelled cases — no training value
+        if label == 'UNKNOWN':
+            continue
+            
         case_id = str(row['case_id'])
+
 
         records.append({
             'patient_id':       f"SCIN-{img_file[:8]}",
