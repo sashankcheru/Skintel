@@ -1,5 +1,6 @@
 services:
-  # MongoDB Database
+
+  # ── MongoDB ────────────────────────────────────────────────────────────────
   mongodb:
     image: mongo:7.0
     container_name: skintel_mongodb
@@ -21,7 +22,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # MinIO Object Storage (S3-compatible)
+  # ── MinIO ──────────────────────────────────────────────────────────────────
   minio:
     image: minio/minio:latest
     container_name: skintel_minio
@@ -43,7 +44,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # MinIO Bucket Setup
+  # ── MinIO Bucket Setup ─────────────────────────────────────────────────────
   minio-setup:
     image: minio/mc:latest
     container_name: skintel_minio_setup
@@ -56,16 +57,35 @@ services:
       /bin/sh -c "
       sleep 5;
       /usr/bin/mc alias set skintel http://minio:9000 minioadmin minioadmin123;
-      /usr/bin/mc mb skintel/skintel-images --ignore-existing;
-      /usr/bin/mc mb skintel/processed-images --ignore-existing;
-      /usr/bin/mc mb skintel/skintel-models --ignore-existing;
+      /usr/bin/mc mb skintel/skintel-images    --ignore-existing;
+      /usr/bin/mc mb skintel/processed-images  --ignore-existing;
+      /usr/bin/mc mb skintel/skintel-models    --ignore-existing;
+      /usr/bin/mc mb skintel/skintel-runtime   --ignore-existing;
       /usr/bin/mc anonymous set download skintel/skintel-images;
       /usr/bin/mc anonymous set download skintel/processed-images;
-      echo 'MinIO buckets created successfully';
+      echo 'MinIO buckets ready';
       exit 0;
       "
 
-  # FastAPI Backend
+  # ── Redis (Celery broker + result backend) ─────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: skintel_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - skintel_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # ── FastAPI Backend ────────────────────────────────────────────────────────
   backend:
     build:
       context: .
@@ -97,6 +117,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - skintel_network
     healthcheck:
@@ -105,6 +127,51 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # ── Celery GPU Worker ──────────────────────────────────────────────────────
+  # Handles all heavy async tasks: ETL, Module 2 preprocessing, inference.
+  # Runs on the same image as backend but with a different entrypoint.
+  # GPU reservation ensures PyTorch can access the RTX 3050.
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skintel_celery_worker
+    restart: unless-stopped
+    entrypoint: ["celery", "-A", "modules.celery_app", "worker",
+                 "--loglevel=info", "--concurrency=1", "-Q", "skintel"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "PYTHONPATH=/app celery -A modules.celery_app inspect ping --timeout=10"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app
+    volumes:
+      - ./modules:/app/modules
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+      - ./.env:/app/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - skintel_network
 
 networks:
   skintel_network:
@@ -116,4 +183,6 @@ volumes:
   mongodb_config:
     driver: local
   minio_data:
+    driver: local
+  redis_data:
     driver: local

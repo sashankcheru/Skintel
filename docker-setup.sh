@@ -12,35 +12,24 @@ echo ""
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print colored output
-print_status() {
-    echo -e "${GREEN}[✓]${NC} $1"
-}
+print_status()  { echo -e "${GREEN}[✓]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[!]${NC} $1"; }
+print_error()   { echo -e "${RED}[✗]${NC} $1"; }
 
-print_warning() {
-    echo -e "${YELLOW}[!]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[✗]${NC} $1"
-}
-
-# Check if Docker is installed
+# Check Docker
 if ! command -v docker &> /dev/null; then
     print_error "Docker is not installed. Please install Docker first."
     exit 1
 fi
-
 print_status "Docker is installed"
 
-# Check if Docker Compose is installed
+# Check Docker Compose
 if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
     print_error "Docker Compose is not installed. Please install Docker Compose first."
     exit 1
 fi
-
 print_status "Docker Compose is installed"
 
 # Create necessary directories
@@ -49,7 +38,7 @@ echo "Creating project directories..."
 mkdir -p data/raw data/processed logs models/checkpoints
 print_status "Directories created"
 
-# Check if .env file exists
+# Check .env
 if [ ! -f .env ]; then
     print_warning ".env file not found. Please create one from .env.example"
 else
@@ -59,7 +48,7 @@ fi
 # Main menu
 echo ""
 echo "What would you like to do?"
-echo "1) Start all services (MinIO + MongoDB + FastAPI)"
+echo "1) Start all services (MongoDB + MinIO + Redis + FastAPI + Celery)"
 echo "2) Stop all services"
 echo "3) View service logs"
 echo "4) Restart services"
@@ -80,10 +69,11 @@ case $choice in
         print_status "Services started successfully!"
         echo ""
         echo "Access points:"
-        echo "  - FastAPI Backend: http://localhost:8000"
-        echo "  - API Documentation: http://localhost:8000/docs"
-        echo "  - MinIO Console: http://localhost:9001 (minioadmin/minioadmin123)"
-        echo "  - MongoDB: mongodb://localhost:27017 (admin/skintel123)"
+        echo "  - FastAPI Backend:    http://localhost:8000"
+        echo "  - API Documentation:  http://localhost:8000/docs"
+        echo "  - MinIO Console:      http://localhost:9001  (minioadmin / minioadmin123)"
+        echo "  - MongoDB:            mongodb://localhost:27017  (skintel_admin / skintel123)"
+        echo "  - Redis:              redis://localhost:6379"
         echo ""
         print_status "Waiting for services to be healthy..."
         sleep 10
@@ -97,12 +87,12 @@ case $choice in
         ;;
     3)
         echo ""
-        echo "Available services: backend, minio, mongodb"
+        echo "Available services: backend, celery_worker, mongodb, minio, redis"
         read -p "Enter service name (or 'all' for all services): " service
         if [ "$service" == "all" ]; then
             docker-compose logs -f
         else
-            docker-compose logs -f $service
+            docker-compose logs -f "$service"
         fi
         ;;
     4)
@@ -139,7 +129,37 @@ case $choice in
     8)
         echo ""
         print_status "Initializing Module 1 (Data Bedrock)..."
-        docker-compose exec backend python -m modules.module1_bedrock.initialize_bedrock
+        echo ""
+
+        # Step 1 — init Parquet schema
+        print_status "Step 1/3 — Initialising Parquet schema..."
+        curl -s -X POST http://localhost:8000/api/v1/bedrock/init | python3 -m json.tool
+        echo ""
+
+        # Step 2 — seed MongoDB knowledge base
+        print_status "Step 2/3 — Seeding MongoDB knowledge base..."
+        curl -s -X POST http://localhost:8000/api/v1/bedrock/seed | python3 -m json.tool
+        echo ""
+
+        # Step 3 — dispatch ETL task to Celery worker
+        print_status "Step 3/3 — Dispatching ETL task to Celery worker..."
+        RESPONSE=$(curl -s -X POST http://localhost:8000/api/v1/bedrock/ingest)
+        echo "$RESPONSE" | python3 -m json.tool
+        TASK_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['task_id'])" 2>/dev/null)
+        echo ""
+
+        if [ -n "$TASK_ID" ]; then
+            print_status "ETL task dispatched — task_id: $TASK_ID"
+            echo ""
+            echo "Poll status with:"
+            echo "  curl http://localhost:8000/api/v1/bedrock/task/$TASK_ID"
+            echo ""
+            print_status "Waiting 10s then checking status..."
+            sleep 10
+            curl -s "http://localhost:8000/api/v1/bedrock/task/$TASK_ID" | python3 -m json.tool
+        else
+            print_warning "Could not extract task_id — check the response above"
+        fi
         ;;
     9)
         echo ""
