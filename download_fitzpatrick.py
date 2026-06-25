@@ -9,8 +9,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # ==========================================
 CSV_PATH = 'data/raw/fitzpatrick17k/fitzpatrick17k.csv'
 SAVE_DIR = 'data/raw/fitzpatrick17k/images'
-SAMPLE_SIZE = 1000  # Change to None if you want the full 16,577 images later
-MAX_WORKERS = 10    # Adjust based on your internet stability (5-20)
+SAMPLE_SIZE = None  # Change to None if you want the full 16,577 images later
+MAX_WORKERS = 20    # Adjust based on your internet stability (5-20)
 
 # Create directory if it doesn't exist
 os.makedirs(SAVE_DIR, exist_ok=True)
